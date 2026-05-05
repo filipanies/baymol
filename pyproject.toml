@@ -1,0 +1,27 @@
+[project]
+name = "baymol"
+version = "0.1.0"
+description = "Tools for synthesis-constrained molecular library generation and molecular feature computation."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Filip Aniés" }
+]
+dependencies = [
+    "numpy",
+    "pandas",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
