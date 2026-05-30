@@ -10,18 +10,33 @@ Supported reaction types
 
 CLI usage
 ---------
-  python -m baymol.reactions
-  python -m baymol.reactions --precursors-db output/merged.db --products-db output/products.db
-  python -m baymol.reactions --start-index 500 --max-workers 4
+  python -m baymol.reactions generate --precursors-db output/merged.db --products-db output/products.db
+  python -m baymol.reactions generate --start-index 500 --max-workers 4
+  python -m baymol.reactions dedup --products-db output/products.db --output-db output/dedup.db
 """
 
+import logging
 import os
 import sqlite3
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from functools import lru_cache
 from typing import Optional
 
 from rdkit import Chem
 from rdkit.Chem import rdChemReactions
+
+logger = logging.getLogger(__name__)
+
+
+@lru_cache(maxsize=None)
+def _get_reaction(smarts: str) -> rdChemReactions.ChemicalReaction:
+    """Compile a reaction SMARTS, caching the result (per process).
+
+    The same handful of SMARTS strings are reused across the entire precursor
+    cross-product, so compiling once and reusing is a large speedup. The cache
+    is per-process, which is exactly what the ProcessPoolExecutor workers want.
+    """
+    return rdChemReactions.ReactionFromSmarts(smarts)
 
 
 def mol_from_smiles(smiles: str) -> Chem.Mol:
@@ -52,7 +67,7 @@ def init_products_database(db_path: str) -> None:
     )
     conn.commit()
     conn.close()
-    print(f"Products database initialised: {db_path}")
+    logger.info("Products database initialised: %s", db_path)
 
 
 # ── Reaction SMARTS ───────────────────────────────────────────────────────────
@@ -82,50 +97,52 @@ KNOEVENAGEL_KETONE = r"""
 
 # ── Reaction execution ────────────────────────────────────────────────────────
 
+_SANITIZE_FLAG_NAMES = (
+    (Chem.SanitizeFlags.SANITIZE_PROPERTIES, "PROPERTIES"),
+    (Chem.SanitizeFlags.SANITIZE_SYMMRINGS, "SYMMRINGS"),
+    (Chem.SanitizeFlags.SANITIZE_KEKULIZE, "KEKULIZE"),
+    (Chem.SanitizeFlags.SANITIZE_SETAROMATICITY, "AROMATICITY"),
+)
+
+
 def sanitize(
     products: list,
-    precursor_a_smiles: str = None,
-    precursor_b_smiles: str = None,
+    precursor_a_smiles: Optional[str] = None,
+    precursor_b_smiles: Optional[str] = None,
 ) -> list[str]:
     """Sanitize RDKit product molecules and return valid SMILES strings.
 
-    Logs a warning for each molecule that fails sanitization, with context
-    about the precursors that produced it.
+    Molecules that fail sanitization are skipped (not returned); a warning is
+    logged for each, with context about the precursors that produced it.
     """
     smiles_list = []
     for mol in products:
         try:
-            product_smiles = Chem.MolToSmiles(mol, kekuleSmiles=False)
-        except Exception:
-            product_smiles = "[Could not generate SMILES]"
+            result = Chem.SanitizeMol(mol, catchErrors=True)
+        except Exception as e:
+            logger.warning(
+                "Sanitization raised %s: %s (A: %s, B: %s)",
+                type(e).__name__, e, precursor_a_smiles, precursor_b_smiles,
+            )
+            continue
+
+        if result != 0:
+            error_types = [name for flag, name in _SANITIZE_FLAG_NAMES if result & flag]
+            logger.warning(
+                "Skipping product that failed sanitization (code %s%s) (A: %s, B: %s)",
+                result,
+                f", {', '.join(error_types)}" if error_types else "",
+                precursor_a_smiles, precursor_b_smiles,
+            )
+            continue
 
         try:
-            result = Chem.SanitizeMol(mol, catchErrors=True)
-            if result != 0:
-                print(f"    ⚠ Sanitization warning (code {result})")
-                if precursor_a_smiles:
-                    print(f"       A: {precursor_a_smiles}")
-                if precursor_b_smiles:
-                    print(f"       B: {precursor_b_smiles}")
-                error_types = []
-                if result & Chem.SanitizeFlags.SANITIZE_PROPERTIES:
-                    error_types.append("PROPERTIES")
-                if result & Chem.SanitizeFlags.SANITIZE_SYMMRINGS:
-                    error_types.append("SYMMRINGS")
-                if result & Chem.SanitizeFlags.SANITIZE_KEKULIZE:
-                    error_types.append("KEKULIZE")
-                if result & Chem.SanitizeFlags.SANITIZE_SETAROMATICITY:
-                    error_types.append("AROMATICITY")
-                if error_types:
-                    print(f"       Error types: {', '.join(error_types)}")
             smiles_list.append(Chem.MolToSmiles(mol))
         except Exception as e:
-            print(f"    ⚠ Sanitization error: {type(e).__name__}: {e}")
-            print(f"       Product: {product_smiles}")
-            if precursor_a_smiles:
-                print(f"       A: {precursor_a_smiles}")
-            if precursor_b_smiles:
-                print(f"       B: {precursor_b_smiles}")
+            logger.warning(
+                "Could not generate SMILES for sanitized product: %s: %s (A: %s, B: %s)",
+                type(e).__name__, e, precursor_a_smiles, precursor_b_smiles,
+            )
     return smiles_list
 
 
@@ -145,12 +162,12 @@ def chemical_reaction(
         List of product SMILES. Empty list if precursors cannot be parsed or
         the reaction produces no products.
     """
-    rxn = rdChemReactions.ReactionFromSmarts(reaction)
+    rxn = _get_reaction(reaction)
     try:
         mol_a = mol_from_smiles(precursor_a_smiles)
         mol_b = mol_from_smiles(precursor_b_smiles)
     except ValueError as e:
-        print(f"    ⚠ Precursor parse error: {e}")
+        logger.warning("Precursor parse error: %s", e)
         return []
 
     products = []
@@ -195,12 +212,29 @@ def _couple_n(
     return current
 
 
-def process_row(row_a: dict, precursors_db: str) -> list[dict]:
+# Each worker process opens one read-only connection and reuses it across all
+# the rows it handles, rather than reopening per row. Workers only ever read
+# the precursors DB, and concurrent readers on a SQLite file are safe.
+_worker_conn: Optional[sqlite3.Connection] = None
+
+
+def _init_worker(precursors_db: str) -> None:
+    """ProcessPoolExecutor initializer: open one connection per worker process."""
+    global _worker_conn
+    _worker_conn = sqlite3.connect(precursors_db)
+    _worker_conn.row_factory = sqlite3.Row
+
+
+def process_row(row_a: dict, precursors_db: Optional[str] = None) -> list[dict]:
     """Generate all cross-coupling products for precursor row_a against all
     compatible partners in the database.
 
     This function runs in a subprocess (via ProcessPoolExecutor), so row_a must
     be a plain dict rather than a sqlite3.Row (which is not picklable).
+
+    Inside the pool it reuses the per-worker connection opened by _init_worker.
+    If called standalone (e.g. in tests) with an explicit precursors_db, it
+    opens and closes its own connection.
 
     Returns:
         List of dicts with keys: product_smiles, precursor_a_smiles, precursor_b_smiles.
@@ -208,8 +242,15 @@ def process_row(row_a: dict, precursors_db: str) -> list[dict]:
     a = row_a
     row_products = []
 
-    conn = sqlite3.connect(precursors_db)
-    conn.row_factory = sqlite3.Row
+    if _worker_conn is not None:
+        conn = _worker_conn
+        owns_conn = False
+    elif precursors_db is not None:
+        conn = sqlite3.connect(precursors_db)
+        conn.row_factory = sqlite3.Row
+        owns_conn = True
+    else:
+        raise ValueError("process_row needs a worker connection or a precursors_db path")
     cursor = conn.cursor()
 
     def _add(product_smiles, partner):
@@ -237,17 +278,21 @@ def process_row(row_a: dict, precursors_db: str) -> list[dict]:
                 if a["aryl_bo2"] == 1:
                     if x > 0:
                         out = _couple_n(SUZUKI, out, a["smiles"], x)
-                        if out is None: continue
+                        if out is None:
+                            continue
                     if y > 0:
                         out = _couple_n(SUZUKI_ALKENE_HAL, out, a["smiles"], y)
-                        if out is None: continue
+                        if out is None:
+                            continue
                 else:  # a["alkene_bo2"] == 1
                     if x > 0:
                         out = _couple_n(SUZUKI_ALKENE_BO2, out, a["smiles"], x)
-                        if out is None: continue
+                        if out is None:
+                            continue
                     if y > 0:
                         out = _couple_n(SUZUKI_ALKENES, out, a["smiles"], y)
-                        if out is None: continue
+                        if out is None:
+                            continue
 
                 _add(out, b)
 
@@ -265,17 +310,21 @@ def process_row(row_a: dict, precursors_db: str) -> list[dict]:
                 if b["aryl_hal"] == 1:
                     if x > 0:
                         out = _couple_n(SUZUKI, out, b["smiles"], x, threading_is_first=False)
-                        if out is None: continue
+                        if out is None:
+                            continue
                     if y > 0:
                         out = _couple_n(SUZUKI_ALKENE_BO2, out, b["smiles"], y, threading_is_first=False)
-                        if out is None: continue
+                        if out is None:
+                            continue
                 else:  # b["alkene_hal"] == 1
                     if x > 0:
                         out = _couple_n(SUZUKI_ALKENE_HAL, out, b["smiles"], x, threading_is_first=False)
-                        if out is None: continue
+                        if out is None:
+                            continue
                     if y > 0:
                         out = _couple_n(SUZUKI_ALKENES, out, b["smiles"], y, threading_is_first=False)
-                        if out is None: continue
+                        if out is None:
+                            continue
 
                 _add(out, b)
 
@@ -295,17 +344,21 @@ def process_row(row_a: dict, precursors_db: str) -> list[dict]:
                 if a["aryl_snr3"] == 1:
                     if x > 0:
                         out = _couple_n(STILLE, out, a["smiles"], x)
-                        if out is None: continue
+                        if out is None:
+                            continue
                     if y > 0:
                         out = _couple_n(STILLE_ALKENE_HAL, out, a["smiles"], y)
-                        if out is None: continue
+                        if out is None:
+                            continue
                 else:  # a["alkene_snr3"] == 1
                     if x > 0:
                         out = _couple_n(STILLE_ALKENE_SNR3, out, a["smiles"], x)
-                        if out is None: continue
+                        if out is None:
+                            continue
                     if y > 0:
                         out = _couple_n(STILLE_ALKENES, out, a["smiles"], y)
-                        if out is None: continue
+                        if out is None:
+                            continue
 
                 _add(out, b)
 
@@ -322,17 +375,21 @@ def process_row(row_a: dict, precursors_db: str) -> list[dict]:
                 if b["aryl_hal"] == 1:
                     if x > 0:
                         out = _couple_n(STILLE, out, b["smiles"], x, threading_is_first=False)
-                        if out is None: continue
+                        if out is None:
+                            continue
                     if y > 0:
                         out = _couple_n(STILLE_ALKENE_SNR3, out, b["smiles"], y, threading_is_first=False)
-                        if out is None: continue
+                        if out is None:
+                            continue
                 else:  # b["alkene_hal"] == 1
                     if x > 0:
                         out = _couple_n(STILLE_ALKENE_HAL, out, b["smiles"], x, threading_is_first=False)
-                        if out is None: continue
+                        if out is None:
+                            continue
                     if y > 0:
                         out = _couple_n(STILLE_ALKENES, out, b["smiles"], y, threading_is_first=False)
-                        if out is None: continue
+                        if out is None:
+                            continue
 
                 _add(out, b)
 
@@ -352,10 +409,12 @@ def process_row(row_a: dict, precursors_db: str) -> list[dict]:
 
                 if x > 0:
                     out = _couple_n(SONOGASHIRA, out, a["smiles"], x)
-                    if out is None: continue
+                    if out is None:
+                        continue
                 if y > 0:
                     out = _couple_n(SONOGASHIRA_ALKENE_HAL, out, a["smiles"], y)
-                    if out is None: continue
+                    if out is None:
+                        continue
 
                 _add(out, b)
 
@@ -370,10 +429,12 @@ def process_row(row_a: dict, precursors_db: str) -> list[dict]:
 
                 if b["aryl_hal"] == 1:
                     out = _couple_n(SONOGASHIRA, out, b["smiles"], n_alk, threading_is_first=False)
-                    if out is None: continue
+                    if out is None:
+                        continue
                 else:  # b["alkene_hal"] == 1
                     out = _couple_n(SONOGASHIRA_ALKENE_HAL, out, b["smiles"], n_alk, threading_is_first=False)
-                    if out is None: continue
+                    if out is None:
+                        continue
 
                 _add(out, b)
 
@@ -395,10 +456,12 @@ def process_row(row_a: dict, precursors_db: str) -> list[dict]:
                 # a["smiles"] (the aldehyde) is constant 1st.
                 if x > 0:
                     out = _couple_n(KNOEVENAGEL_MALONONITRILE, out, a["smiles"], x, threading_is_first=False)
-                    if out is None: continue
+                    if out is None:
+                        continue
                 if y > 0:
                     out = _couple_n(KNOEVENAGEL_KETONE, out, a["smiles"], y, threading_is_first=False)
-                    if out is None: continue
+                    if out is None:
+                        continue
 
                 _add(out, b)
 
@@ -416,15 +479,18 @@ def process_row(row_a: dict, precursors_db: str) -> list[dict]:
                 # b (the mono methylene) is constant 2nd.
                 if b["malononitrile_ketone"] == 1:
                     out = _couple_n(KNOEVENAGEL_MALONONITRILE, out, b["smiles"], n_ald)
-                    if out is None: continue
+                    if out is None:
+                        continue
                 else:  # b["diketone"] == 1
                     out = _couple_n(KNOEVENAGEL_KETONE, out, b["smiles"], n_ald)
-                    if out is None: continue
+                    if out is None:
+                        continue
 
                 _add(out, b)
 
     finally:
-        conn.close()
+        if owns_conn:
+            conn.close()
 
     return row_products
 
@@ -447,10 +513,9 @@ def generate_products(
         start_index:   0-based row index to resume from.
         max_workers:   Number of parallel worker processes.
     """
-    print("Starting product generation...")
+    logger.info("Starting product generation...")
     if start_index > 0:
-        print(f"Resuming from row index {start_index}...")
-    print("=" * 60)
+        logger.info("Resuming from row index %d...", start_index)
 
     init_products_database(products_db)
 
@@ -459,21 +524,26 @@ def generate_products(
     cur_a = conn_pre.cursor()
     cur_a.execute("SELECT COUNT(*) FROM precursors")
     total_rows = cur_a.fetchone()[0]
-    cur_a.execute("SELECT * FROM precursors LIMIT -1 OFFSET ?", (start_index,))
-    print(f"Rows to process: {total_rows - start_index}")
+    # ORDER BY id so the OFFSET (start_index) is deterministic across runs.
+    cur_a.execute("SELECT * FROM precursors ORDER BY id LIMIT -1 OFFSET ?", (start_index,))
+    logger.info("Rows to process: %d", total_rows - start_index)
 
     conn_prod = sqlite3.connect(products_db)
     cur_prod = conn_prod.cursor()
     total_products = 0
 
     try:
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        with ProcessPoolExecutor(
+            max_workers=max_workers,
+            initializer=_init_worker,
+            initargs=(precursors_db,),
+        ) as executor:
             futures = {}
             rows_iter = enumerate(cur_a, start=start_index)
 
             # Fill the pool to max_workers initially
             for idx, row_a in rows_iter:
-                futures[executor.submit(process_row, dict(row_a), precursors_db)] = idx
+                futures[executor.submit(process_row, dict(row_a))] = idx
                 if len(futures) >= max_workers:
                     break
 
@@ -484,7 +554,7 @@ def generate_products(
                     try:
                         row_products = future.result()
                     except Exception as e:
-                        print(f"  ⚠ Row {idx} failed: {e}")
+                        logger.warning("Row %d failed: %s", idx, e)
                         row_products = []
 
                     if row_products:
@@ -496,10 +566,10 @@ def generate_products(
                         )
                         conn_prod.commit()
                         total_products += len(row_products)
-                        print(f"  Row {idx} — saved {len(row_products)} products")
+                        logger.info("Row %d — saved %d products", idx, len(row_products))
 
                     for next_idx, next_row in rows_iter:
-                        futures[executor.submit(process_row, dict(next_row), precursors_db)] = next_idx
+                        futures[executor.submit(process_row, dict(next_row))] = next_idx
                         break
                     break
 
@@ -507,10 +577,7 @@ def generate_products(
         conn_pre.close()
         conn_prod.close()
 
-    print(f"\n{'='*60}")
-    print(f"Product generation complete. Total: {total_products}")
-    print(f"Database: {products_db}")
-    print("=" * 60)
+    logger.info("Product generation complete. Total: %d (%s)", total_products, products_db)
 
 
 def deduplicate_products(db_path: str, output_path: str) -> None:
@@ -525,7 +592,7 @@ def deduplicate_products(db_path: str, output_path: str) -> None:
     """
     import shutil
     shutil.copy2(db_path, output_path)
-    print(f"Copied {db_path!r} → {output_path!r}")
+    logger.info("Copied %r -> %r", db_path, output_path)
 
     conn = sqlite3.connect(output_path)
     cur = conn.cursor()
@@ -544,41 +611,41 @@ def deduplicate_products(db_path: str, output_path: str) -> None:
     """)
     n_dupes = cur.fetchone()[0]
     if n_dupes == 0:
-        print("No duplicates found.")
+        logger.info("No duplicates found.")
         conn.close()
         return
 
-    print(f"Found {n_dupes} SMILES with duplicates. Deduplicating...")
+    logger.info("Found %d SMILES with duplicates. Deduplicating...", n_dupes)
 
     cur.execute("CREATE INDEX IF NOT EXISTS idx_product_smiles ON products(product_smiles)")
     conn.commit()
 
-    # Merge precursor lists into the surviving row for each duplicate group
+    # For each duplicate group, merge ALL precursors into the surviving
+    # (lowest-id) row. The precursor_a and precursor_b lists are treated as
+    # independent sets: collect the distinct values across the whole group and
+    # comma-join them. Using a DISTINCT subquery (rather than substring tests)
+    # avoids both the "only one duplicate merged" bug and the false-positive
+    # substring matches of the previous instr()-based approach.
     cur.execute("""
         UPDATE products
         SET
-            precursor_a_smiles = CASE
-                WHEN instr(p.precursor_a_smiles, dup.precursor_a_smiles) = 0
-                THEN p.precursor_a_smiles || ',' || dup.precursor_a_smiles
-                ELSE p.precursor_a_smiles
-            END,
-            precursor_b_smiles = CASE
-                WHEN instr(p.precursor_b_smiles, dup.precursor_b_smiles) = 0
-                THEN p.precursor_b_smiles || ',' || dup.precursor_b_smiles
-                ELSE p.precursor_b_smiles
-            END
-        FROM (
-            SELECT a.product_smiles,
-                   a.precursor_a_smiles,
-                   a.precursor_b_smiles,
-                   MIN(b.id) AS survivor_id
-            FROM products a
-            JOIN products b ON a.product_smiles = b.product_smiles
-            WHERE a.id != b.id
-            GROUP BY a.id
-        ) dup
-        JOIN products p ON p.id = dup.survivor_id
-        WHERE products.id = dup.survivor_id
+            precursor_a_smiles = (
+                SELECT group_concat(val, ',') FROM (
+                    SELECT DISTINCT g.precursor_a_smiles AS val
+                    FROM products g
+                    WHERE g.product_smiles = products.product_smiles
+                    ORDER BY g.id
+                )
+            ),
+            precursor_b_smiles = (
+                SELECT group_concat(val, ',') FROM (
+                    SELECT DISTINCT g.precursor_b_smiles AS val
+                    FROM products g
+                    WHERE g.product_smiles = products.product_smiles
+                    ORDER BY g.id
+                )
+            )
+        WHERE id IN (SELECT MIN(id) FROM products GROUP BY product_smiles)
     """)
     conn.commit()
 
@@ -588,11 +655,11 @@ def deduplicate_products(db_path: str, output_path: str) -> None:
     """)
     deleted = cur.rowcount
     conn.commit()
-    print(f"Deleted {deleted} duplicate rows.")
+    logger.info("Deleted %d duplicate rows.", deleted)
 
     cur.execute("VACUUM")
     conn.close()
-    print(f"Done. Deduplicated database saved to {output_path!r}")
+    logger.info("Done. Deduplicated database saved to %r", output_path)
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -600,30 +667,49 @@ def deduplicate_products(db_path: str, output_path: str) -> None:
 if __name__ == "__main__":
     import argparse
 
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+
     parser = argparse.ArgumentParser(
-        description="Generate cross-coupled products from a precursor database."
+        description="Generate and deduplicate cross-coupled products."
     )
-    parser.add_argument(
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    gen = sub.add_parser("generate", help="Generate products from a precursor database.")
+    gen.add_argument(
         "--precursors-db", default="output/merged_dedup_precursors.db",
         help="Path to the precursors SQLite database.",
     )
-    parser.add_argument(
+    gen.add_argument(
         "--products-db", default="output/generated_products.db",
         help="Path to the output products SQLite database.",
     )
-    parser.add_argument(
+    gen.add_argument(
         "--start-index", default=0, type=int,
         help="0-based row index to resume from (default: 0).",
     )
-    parser.add_argument(
+    gen.add_argument(
         "--max-workers", default=8, type=int,
         help="Number of parallel worker processes (default: 8).",
     )
+
+    dedup = sub.add_parser("dedup", help="Deduplicate a products database by product SMILES.")
+    dedup.add_argument(
+        "--products-db", required=True,
+        help="Path to the products SQLite database to deduplicate.",
+    )
+    dedup.add_argument(
+        "--output-db", required=True,
+        help="Path for the deduplicated output database.",
+    )
+
     args = parser.parse_args()
 
-    generate_products(
-        precursors_db=args.precursors_db,
-        products_db=args.products_db,
-        start_index=args.start_index,
-        max_workers=args.max_workers,
-    )
+    if args.command == "generate":
+        generate_products(
+            precursors_db=args.precursors_db,
+            products_db=args.products_db,
+            start_index=args.start_index,
+            max_workers=args.max_workers,
+        )
+    elif args.command == "dedup":
+        deduplicate_products(args.products_db, args.output_db)
