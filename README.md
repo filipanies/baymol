@@ -2,41 +2,82 @@
 
 BayMol is a Python/RDKit toolkit for building synthesis-constrained molecular libraries for AI-guided molecular and materials discovery.
 
-The project was developed around a first use case: discovering candidate organic electron-transport materials for perovskite solar cells. In that workflow, BayMol generates candidate molecules from purchasable precursors, applies reaction SMARTS, deduplicates products, and computes molecular descriptors suitable for downstream machine-learning workflows.
+The project grew out of a first use case: discovering candidate organic electron-transport materials for perovskite solar cells. Given a set of purchasable precursors, BayMol detects their reactive motifs, enumerates the products they can form under one-step cross-coupling reactions, and deduplicates the resulting library — producing synthesis-aware candidate molecules for downstream screening.
 
-Although the current configuration targets small-molecule organic semiconductor candidates, the core design is reaction- and objective-agnostic: different precursor sets, SMARTS definitions, and optimisation targets can be used for other one-step molecular discovery problems.
+The design is reaction- and objective-agnostic: different precursor sets and reaction SMARTS can target other one-step molecular discovery problems.
 
-BayMol currently focuses on the candidate-generation, featurisation, and property-prediction stages of a planned ask-tell Bayesian optimisation workflow.
+> **Status — early release.** This version ships the **candidate-generation** core: reactive-site detection, reaction enumeration, and deduplication. Featurisation, property prediction, and Bayesian-optimisation stages are planned (see [Roadmap](#roadmap)) and are being developed on separate branches.
 
-## What BayMol does
+## What BayMol does (this release)
 
-- Detects reactive precursor motifs using SMARTS patterns
-- Enumerates candidate products from configurable one-step RDKit reaction SMARTS
-- Deduplicates products using canonical SMILES
-- Computes RDKit molecular descriptors, substructure flags, and Morgan fingerprints
-- Produces ML-ready molecular feature tables
-- Supports downstream property-prediction and active-learning workflows
-- Includes experimental Chemprop-based HOMO/LUMO prediction workflows
+- Detects reactive precursor motifs — aryl/alkene halides, boronic acids/esters, stannanes, terminal alkynes, aryl aldehydes, and diketones — using SMARTS patterns
+- Flags self-polymerisable precursors (those carrying both a halide and a coupling nucleophile) so they can be excluded from the library
+- Enumerates candidate products via one-step RDKit reaction SMARTS for Suzuki, Stille, Sonogashira, and Knoevenagel couplings
+- Deduplicates products by canonical SMILES, merging the precursors that lead to each product
 
-## Current use case
+## Roadmap
 
-The initial BayMol workflow targets organic electron-transport materials for perovskite solar cells.
+- Molecular featurisation — RDKit descriptors, substructure flags, and Morgan fingerprints → ML-ready feature tables
+- Surrogate property prediction (e.g. HOMO/LUMO frontier orbital energies) and active learning
+- Ask–tell Bayesian optimisation over the generated library
 
-In this setting, generated molecules can be screened using predicted frontier molecular orbital energies, especially HOMO and LUMO levels, before further computational evaluation or experimental follow-up. The long-term goal is to combine synthesis-constrained library generation, surrogate property prediction, and Bayesian optimisation to propose high-value candidates for synthesis and testing.
+## Installation
 
-## Current status
+```bash
+git clone https://github.com/filipanies/baymol.git
+cd baymol
+pip install -e .          # core
+pip install -e ".[dev]"   # plus pytest + ruff
+```
 
-This repository is being cleaned and refactored from an internal research codebase.
+Requires Python ≥ 3.10. Core dependencies: RDKit, NumPy, pandas, tqdm.
 
-The first public version will focus on a minimal, reproducible pipeline:
+## Usage
 
-```text
-example precursors
-    ↓
-reaction enumeration
-    ↓
-product deduplication
-    ↓
-molecular feature generation
-    ↓
-property prediction / ML-ready output table
+### Detect reactive sites
+
+```python
+from baymol.reactive_sites import count_reactive_sites, is_self_polymerisable
+
+count_reactive_sites("Brc1ccccc1")
+# {'aryl_hal': 1, 'alkene_hal': 0, 'aryl_bo2': 0, ...}
+
+# A molecule carrying both a halide and a coupling nucleophile can react
+# with itself, so it is excluded from the precursor library:
+sites = count_reactive_sites("OB(O)c1ccc(Br)cc1")
+is_self_polymerisable(sites)   # True
+```
+
+### Enumerate a coupling product
+
+```python
+from baymol.reactions import chemical_reaction, SUZUKI
+
+# Suzuki coupling: aryl halide + boronic acid -> biaryl
+chemical_reaction(SUZUKI, "Brc1ccccc1", "OB(O)c1ccccc1")
+# ['c1ccc(-c2ccccc2)cc1', ...]   biphenyl; symmetry-equivalent
+#                                duplicates are collapsed by the dedup step
+```
+
+### Batch generation (CLI)
+
+For large libraries, the `reactions` module generates and deduplicates products over a SQLite precursor database:
+
+```bash
+python -m baymol.reactions generate --precursors-db precursors.db --products-db products.db
+python -m baymol.reactions dedup     --products-db products.db --output-db products_dedup.db
+```
+
+> The pipeline that builds the precursor database from raw sources (curation/scraping) is not part of this release.
+
+## Development
+
+```bash
+pip install -e ".[dev]"
+pytest        # run the test suite
+ruff check .  # lint
+```
+
+## License
+
+Released under the MIT License — see [LICENSE](LICENSE).

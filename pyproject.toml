@@ -21,6 +21,10 @@ dev = [
     "ruff",
 ]
 
+[project.urls]
+Homepage = "https://github.com/filipanies/baymol"
+Repository = "https://github.com/filipanies/baymol"
+
 [tool.ruff]
 line-length = 100
 
