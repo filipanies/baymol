@@ -139,6 +139,48 @@ class TestProcessRow:
         assert canon(results[0]["product_smiles"]) == canon("c1ccc(-c2ccccc2)cc1")
         assert results[0]["precursor_a_smiles"] == "OB(O)c1ccccc1"
         assert results[0]["precursor_b_smiles"] == "Brc1ccccc1"
+        assert results[0]["reaction_name"] == "Suzuki"
+
+    def test_stille_pairing_tags_reaction(self, tmp_path):
+        db = make_precursors_db(tmp_path / "pre.db", [
+            {"smiles": "C[Sn](C)(C)c1ccccc1", "aryl_snr3": 1},
+            {"smiles": "Brc1ccccc1", "aryl_hal": 1},
+        ])
+        conn = sqlite3.connect(db)
+        conn.row_factory = sqlite3.Row
+        row_a = dict(conn.execute("SELECT * FROM precursors WHERE id = 1").fetchone())
+        conn.close()
+        results = process_row(row_a, str(db))
+        assert len(results) == 1
+        assert results[0]["reaction_name"] == "Stille"
+        assert canon(results[0]["product_smiles"]) == canon("c1ccc(-c2ccccc2)cc1")
+
+    def test_sonogashira_pairing_tags_reaction(self, tmp_path):
+        db = make_precursors_db(tmp_path / "pre.db", [
+            {"smiles": "C#Cc1ccccc1", "terminal_alkyne": 1},
+            {"smiles": "Brc1ccccc1", "aryl_hal": 1},
+        ])
+        conn = sqlite3.connect(db)
+        conn.row_factory = sqlite3.Row
+        row_a = dict(conn.execute("SELECT * FROM precursors WHERE id = 1").fetchone())
+        conn.close()
+        results = process_row(row_a, str(db))
+        assert len(results) == 1
+        assert results[0]["reaction_name"] == "Sonogashira"
+        assert canon(results[0]["product_smiles"]) == canon("C(#Cc1ccccc1)c1ccccc1")
+
+    def test_knoevenagel_pairing_tags_reaction(self, tmp_path):
+        db = make_precursors_db(tmp_path / "pre.db", [
+            {"smiles": "O=Cc1ccccc1", "aryl_aldehyde": 1},
+            {"smiles": "O=C(CC(=O)c1ccccc1)c1ccccc1", "diketone": 1},
+        ])
+        conn = sqlite3.connect(db)
+        conn.row_factory = sqlite3.Row
+        row_a = dict(conn.execute("SELECT * FROM precursors WHERE id = 1").fetchone())
+        conn.close()
+        results = process_row(row_a, str(db))
+        assert len(results) == 1
+        assert results[0]["reaction_name"] == "Knoevenagel"
 
     def test_no_partner_no_products(self, tmp_path):
         db = make_precursors_db(tmp_path / "pre.db", [
@@ -165,14 +207,15 @@ class TestProductsDatabase:
         conn = sqlite3.connect(db)
         cols = {r[1] for r in conn.execute("PRAGMA table_info(products)")}
         conn.close()
-        assert {"product_smiles", "precursor_a_smiles", "precursor_b_smiles"} <= cols
+        assert {"product_smiles", "precursor_a_smiles", "precursor_b_smiles", "reaction_name"} <= cols
 
     def _seed(self, path, rows):
         init_products_database(str(path))
         conn = sqlite3.connect(path)
         conn.executemany(
-            "INSERT INTO products (product_smiles, precursor_a_smiles, precursor_b_smiles)"
-            " VALUES (?,?,?)",
+            "INSERT INTO products"
+            " (product_smiles, precursor_a_smiles, precursor_b_smiles, reaction_name)"
+            " VALUES (?,?,?,?)",
             rows,
         )
         conn.commit()
@@ -181,32 +224,37 @@ class TestProductsDatabase:
     def test_dedup_merges_all_precursors(self, tmp_path):
         src, out = tmp_path / "p.db", tmp_path / "p_dedup.db"
         self._seed(src, [
-            ("P", "X1", "Y1"), ("P", "X2", "Y2"), ("P", "X3", "Y3"),
-            ("Q", "Z1", "W1"),
+            ("P", "X1", "Y1", "Suzuki"), ("P", "X2", "Y2", "Stille"),
+            ("P", "X3", "Y3", "Suzuki"),
+            ("Q", "Z1", "W1", "Sonogashira"),
         ])
         deduplicate_products(str(src), str(out))
         conn = sqlite3.connect(out)
         rows = conn.execute(
-            "SELECT product_smiles, precursor_a_smiles, precursor_b_smiles"
+            "SELECT product_smiles, precursor_a_smiles, precursor_b_smiles, reaction_name"
             " FROM products ORDER BY product_smiles"
         ).fetchall()
         conn.close()
-        assert rows == [("P", "X1,X2,X3", "Y1,Y2,Y3"), ("Q", "Z1", "W1")]
+        # reaction_name merges as a DISTINCT set: the two Suzukis collapse to one
+        assert rows == [
+            ("P", "X1,X2,X3", "Y1,Y2,Y3", "Suzuki,Stille"),
+            ("Q", "Z1", "W1", "Sonogashira"),
+        ]
 
     def test_dedup_deduplicates_identical_precursors(self, tmp_path):
         src, out = tmp_path / "p.db", tmp_path / "p_dedup.db"
-        self._seed(src, [("P", "X1", "Y1"), ("P", "X1", "Y1")])
+        self._seed(src, [("P", "X1", "Y1", "Suzuki"), ("P", "X1", "Y1", "Suzuki")])
         deduplicate_products(str(src), str(out))
         conn = sqlite3.connect(out)
         rows = conn.execute(
-            "SELECT product_smiles, precursor_a_smiles, precursor_b_smiles FROM products"
+            "SELECT product_smiles, precursor_a_smiles, precursor_b_smiles, reaction_name FROM products"
         ).fetchall()
         conn.close()
-        assert rows == [("P", "X1", "Y1")]
+        assert rows == [("P", "X1", "Y1", "Suzuki")]
 
     def test_dedup_no_duplicates(self, tmp_path):
         src, out = tmp_path / "p.db", tmp_path / "p_dedup.db"
-        self._seed(src, [("P", "X1", "Y1"), ("Q", "X2", "Y2")])
+        self._seed(src, [("P", "X1", "Y1", "Suzuki"), ("Q", "X2", "Y2", "Stille")])
         deduplicate_products(str(src), str(out))
         conn = sqlite3.connect(out)
         n = conn.execute("SELECT COUNT(*) FROM products").fetchone()[0]
