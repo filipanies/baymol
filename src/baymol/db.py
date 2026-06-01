@@ -201,3 +201,74 @@ def init_products_database(db_path: str) -> None:
     conn.commit()
     conn.close()
     logger.info("Products database initialised: %s", db_path)
+
+
+# ── Feature tables (added to an existing products database) ───────────────────
+
+def init_molecular_features_table(db_path: str) -> None:
+    """Create the molecular_features table on an existing products database.
+
+    One row per product (product_id is the PK and references products.id). Holds
+    the tabular features from features.compute_features: scalar descriptors,
+    element composition (JSON), and one INTEGER 0/1 column per substructure
+    pattern.
+
+    NOTE: the substructure flag columns are generated from
+    features.SUBSTRUCTURE_SMARTS, so editing that dict changes this schema. An
+    existing database would need to be rebuilt to match (drop the table and
+    re-run featurisation).
+    """
+    from baymol.features import SUBSTRUCTURE_SMARTS
+
+    flag_cols = ",\n            ".join(
+        f"{name} INTEGER NOT NULL" for name in SUBSTRUCTURE_SMARTS
+    )
+    conn = sqlite3.connect(db_path)
+    conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS molecular_features (
+            product_id                  INTEGER PRIMARY KEY REFERENCES products(id),
+            total_atom_count            INTEGER NOT NULL,
+            heavy_atom_count            INTEGER NOT NULL,
+            molecular_weight            REAL NOT NULL,
+            aromatic_ring_count         INTEGER NOT NULL,
+            fused_ring_count            INTEGER NOT NULL,
+            aromatic_atom_count         INTEGER NOT NULL,
+            fraction_sp2                REAL NOT NULL,
+            fraction_sp                 REAL NOT NULL,
+            h_bond_donor_count          INTEGER NOT NULL,
+            h_bond_acceptor_count       INTEGER NOT NULL,
+            rotatable_bond_count        INTEGER NOT NULL,
+            unique_elements             TEXT NOT NULL,
+            unique_elements_with_counts TEXT NOT NULL,
+            {flag_cols},
+            computed_at                 TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
+    logger.info("molecular_features table ready: %s", db_path)
+
+
+def init_fingerprints_table(db_path: str) -> None:
+    """Create the fingerprints table on an existing products database.
+
+    One row per product. Morgan fingerprints are stored as compact BLOBs:
+      - morgan_fp:       np.packbits(bit_array).tobytes()       -> nbits/8 bytes (256 @ 2048 bits)
+      - morgan_count_fp: np.array(counts, uint16).tobytes()     -> nbits*2 bytes (4096 @ 2048)
+    Decode with:
+      bits   = np.unpackbits(np.frombuffer(blob, np.uint8))
+      counts = np.frombuffer(blob, np.uint16)
+    Fingerprints are computed at radius=2, nbits=2048 (see featurise).
+    """
+    conn = sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS fingerprints (
+            product_id      INTEGER PRIMARY KEY REFERENCES products(id),
+            morgan_fp       BLOB NOT NULL,
+            morgan_count_fp BLOB NOT NULL,
+            computed_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
+    logger.info("fingerprints table ready: %s", db_path)
