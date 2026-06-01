@@ -200,18 +200,3 @@ def init_products_database(db_path: str) -> None:
     conn.commit()
     conn.close()
     logger.info("Products database initialised: %s", db_path)
-
-
-def save_products_batch(products: list[dict], db_path: str) -> None:
-    """Append a batch of product dicts to the products database."""
-    if not products:
-        return
-    conn = sqlite3.connect(db_path)
-    conn.executemany(
-        """INSERT INTO products (product_smiles, precursor_a_smiles, precursor_b_smiles)
-           VALUES (:product_smiles, :precursor_a_smiles, :precursor_b_smiles)""",
-        products,
-    )
-    conn.commit()
-    conn.close()
-    logger.info("Saved %d products.", len(products))

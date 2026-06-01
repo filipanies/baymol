@@ -8,7 +8,6 @@ from baymol.db import (
     init_products_database,
     merge_precursors,
     save_precursors,
-    save_products_batch,
 )
 from baymol.reactive_sites import criteria_smarts
 
@@ -159,15 +158,3 @@ class TestProductsTables:
         db = tmp_path / "prod.db"
         init_products_database(str(db))
         assert {"product_smiles", "precursor_a_smiles", "precursor_b_smiles"} <= table_columns(db, "products")
-
-    def test_save_products_batch(self, tmp_path):
-        db = tmp_path / "prod.db"
-        init_products_database(str(db))
-        save_products_batch(
-            [{"product_smiles": "P", "precursor_a_smiles": "A", "precursor_b_smiles": "B"}],
-            str(db),
-        )
-        conn = sqlite3.connect(db)
-        n = conn.execute("SELECT COUNT(*) FROM products").fetchone()[0]
-        conn.close()
-        assert n == 1
