@@ -16,7 +16,6 @@ CLI usage
 """
 
 import logging
-import os
 import sqlite3
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from functools import lru_cache
@@ -24,6 +23,8 @@ from typing import Optional
 
 from rdkit import Chem
 from rdkit.Chem import rdChemReactions
+
+from baymol.db import init_products_database
 
 logger = logging.getLogger(__name__)
 
@@ -45,29 +46,6 @@ def mol_from_smiles(smiles: str) -> Chem.Mol:
     if mol is None:
         raise ValueError(f"Could not parse SMILES: {smiles}")
     return mol
-
-
-# ── Products database ───────────────────────────────────────────────────────
-
-def init_products_database(db_path: str) -> None:
-    """Create (or verify) the products SQLite database."""
-    os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
-    conn = sqlite3.connect(db_path)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS products (
-            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-            product_smiles     TEXT NOT NULL,
-            precursor_a_smiles TEXT NOT NULL,
-            precursor_b_smiles TEXT NOT NULL,
-            created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_product_smiles ON products(product_smiles)"
-    )
-    conn.commit()
-    conn.close()
-    logger.info("Products database initialised: %s", db_path)
 
 
 # ── Reaction SMARTS ───────────────────────────────────────────────────────────
