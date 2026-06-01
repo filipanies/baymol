@@ -46,23 +46,27 @@ def init_precursors_database(db_path: str) -> None:
 
 
 def save_precursors(precursors: list[dict], db_path: str) -> None:
-    """Append a list of precursor dicts to the precursors table."""
+    """Append a list of precursor dicts to the precursors table.
+
+    The whole list is inserted in a single transaction: if any row fails (e.g. a
+    dict with an unknown column or a missing NOT NULL field), the batch is rolled
+    back and the error propagates. The connection is always closed.
+    """
     if not precursors:
         return
 
     conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-
-    for p in precursors:
-        columns      = ", ".join(p.keys())
-        placeholders = ", ".join("?" for _ in p)
-        cursor.execute(
-            f"INSERT INTO precursors ({columns}) VALUES ({placeholders})",
-            list(p.values()),
-        )
-
-    conn.commit()
-    conn.close()
+    try:
+        with conn:  # commits on success, rolls back if any insert raises
+            for p in precursors:
+                columns      = ", ".join(p.keys())
+                placeholders = ", ".join("?" for _ in p)
+                conn.execute(
+                    f"INSERT INTO precursors ({columns}) VALUES ({placeholders})",
+                    list(p.values()),
+                )
+    finally:
+        conn.close()
     logger.info("Saved %d precursors.", len(precursors))
 
 

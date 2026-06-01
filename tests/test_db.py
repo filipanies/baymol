@@ -1,5 +1,7 @@
 import sqlite3
 
+import pytest
+
 from baymol.db import (
     deduplicate_precursors,
     init_precursors_database,
@@ -65,6 +67,23 @@ class TestSavePrecursors:
         db = tmp_path / "pre.db"
         init_precursors_database(str(db))
         save_precursors([], str(db))
+        conn = sqlite3.connect(db)
+        n = conn.execute("SELECT COUNT(*) FROM precursors").fetchone()[0]
+        conn.close()
+        assert n == 0
+
+    def test_bad_row_rolls_back_whole_batch(self, tmp_path):
+        db = tmp_path / "pre.db"
+        init_precursors_database(str(db))
+        with pytest.raises(sqlite3.OperationalError):
+            save_precursors(
+                [
+                    {"smiles": "A", "supplier": "S1"},               # valid
+                    {"smiles": "B", "supplier": "S2", "nope": 1},    # unknown column → fails
+                ],
+                str(db),
+            )
+        # atomic: the valid first row must not have been committed
         conn = sqlite3.connect(db)
         n = conn.execute("SELECT COUNT(*) FROM precursors").fetchone()[0]
         conn.close()
