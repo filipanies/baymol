@@ -4,11 +4,14 @@ import pytest
 
 from baymol.db import (
     deduplicate_precursors,
+    init_fingerprints_table,
+    init_molecular_features_table,
     init_precursors_database,
     init_products_database,
     merge_precursors,
     save_precursors,
 )
+from baymol.features import SUBSTRUCTURE_SMARTS
 from baymol.reactive_sites import criteria_smarts
 
 
@@ -158,3 +161,21 @@ class TestProductsTables:
         db = tmp_path / "prod.db"
         init_products_database(str(db))
         assert {"product_smiles", "precursor_a_smiles", "precursor_b_smiles", "reaction_name"} <= table_columns(db, "products")
+
+
+class TestFeatureTables:
+    def test_molecular_features_columns(self, tmp_path):
+        db = tmp_path / "prod.db"
+        init_products_database(str(db))
+        init_molecular_features_table(str(db))
+        cols = table_columns(db, "molecular_features")
+        assert {"product_id", "heavy_atom_count", "molecular_weight",
+                "unique_elements", "unique_elements_with_counts"} <= cols
+        # one column per substructure pattern
+        assert set(SUBSTRUCTURE_SMARTS) <= cols
+
+    def test_fingerprints_columns(self, tmp_path):
+        db = tmp_path / "prod.db"
+        init_products_database(str(db))
+        init_fingerprints_table(str(db))
+        assert {"product_id", "morgan_fp", "morgan_count_fp"} <= table_columns(db, "fingerprints")
