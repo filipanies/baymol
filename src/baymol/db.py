@@ -5,11 +5,9 @@ All functions accept an explicit db_path argument — there are no module-level
 path defaults here. Each scraper / script passes its own path.
 """
 
-import csv
 import logging
 import os
 import sqlite3
-from typing import Optional
 
 from baymol.reactive_sites import criteria_smarts
 
@@ -68,44 +66,54 @@ def save_precursors(precursors: list[dict], db_path: str) -> None:
     logger.info("Saved %d precursors.", len(precursors))
 
 
-def db_to_csv(db_path: str, csv_path: str, table_name: Optional[str] = None) -> None:
-    """Export a database table to CSV.
+def merge_precursors(file_names: list[str], output_path: str) -> None:
+    """Merge multiple precursor databases into one (without deduplicating).
 
-    Auto-selects 'products' then 'precursors' if table_name is not specified.
+    Any existing file at output_path is overwritten. Call deduplicate_precursors
+    on the result afterwards to collapse duplicate SMILES across sources.
+
+    Args:
+        file_names:  Paths to source SQLite database files.
+        output_path: Path for the merged output database.
     """
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
+    reactive_cols = list(criteria_smarts.keys())
 
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-    tables = [row[0] for row in cursor.fetchall()]
-    if not tables:
-        logger.warning("No tables found in %s.", db_path)
-        conn.close()
-        return
+    if os.path.exists(output_path):
+        os.remove(output_path)
 
-    if table_name is None:
-        if "products" in tables:
-            table_name = "products"
-        elif "precursors" in tables:
-            table_name = "precursors"
-        else:
-            table_name = tables[0]
-        logger.info("Auto-selected table: %r", table_name)
-    elif table_name not in tables:
-        logger.warning("Table %r not found. Available: %s", table_name, tables)
-        conn.close()
-        return
+    conn = sqlite3.connect(output_path)
+    cur = conn.cursor()
 
-    cursor.execute(f"SELECT * FROM {table_name}")
-    rows = cursor.fetchall()
-    columns = [d[0] for d in cursor.description]
+    cur.execute(f"""
+        CREATE TABLE precursors (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            smiles     TEXT NOT NULL,
+            cas        TEXT,
+            product_no TEXT,
+            supplier   TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            {", ".join(f"{col} INTEGER DEFAULT 0" for col in reactive_cols)}
+        )
+    """)
+    conn.commit()
+
+    for i, path in enumerate(file_names):
+        alias = f"src{i}"
+        cur.execute(f"ATTACH DATABASE ? AS {alias}", (path,))
+        cur.execute(f"""
+            INSERT INTO precursors (smiles, cas, product_no, supplier, created_at,
+                                    {", ".join(reactive_cols)})
+            SELECT smiles, cas, product_no, supplier, created_at,
+                   {", ".join(reactive_cols)}
+            FROM   {alias}.precursors
+        """)
+        conn.commit()
+        cur.execute(f"DETACH DATABASE {alias}")
+        logger.info("Appended %r", path)
+
+    cur.execute("SELECT COUNT(*) FROM precursors")
+    logger.info("Merged %d rows into %s", cur.fetchone()[0], output_path)
     conn.close()
-
-    with open(csv_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(columns)
-        writer.writerows(rows)
-    logger.info("Exported %d rows to %s", len(rows), csv_path)
 
 
 def deduplicate_precursors(db_path: str) -> None:
@@ -165,56 +173,6 @@ def deduplicate_precursors(db_path: str) -> None:
     conn.commit()
     conn.close()
     logger.info("Done. %d duplicate(s) removed from %r.", removed, db_path)
-
-
-def merge_precursors(file_names: list[str], output_path: str) -> None:
-    """Merge multiple precursor databases into one (without deduplicating).
-
-    Any existing file at output_path is overwritten. Call deduplicate_precursors
-    on the result afterwards to collapse duplicate SMILES across sources.
-
-    Args:
-        file_names:  Paths to source SQLite database files.
-        output_path: Path for the merged output database.
-    """
-    reactive_cols = list(criteria_smarts.keys())
-
-    if os.path.exists(output_path):
-        os.remove(output_path)
-
-    conn = sqlite3.connect(output_path)
-    cur = conn.cursor()
-
-    cur.execute(f"""
-        CREATE TABLE precursors (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            smiles     TEXT NOT NULL,
-            cas        TEXT,
-            product_no TEXT,
-            supplier   TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            {", ".join(f"{col} INTEGER DEFAULT 0" for col in reactive_cols)}
-        )
-    """)
-    conn.commit()
-
-    for i, path in enumerate(file_names):
-        alias = f"src{i}"
-        cur.execute(f"ATTACH DATABASE ? AS {alias}", (path,))
-        cur.execute(f"""
-            INSERT INTO precursors (smiles, cas, product_no, supplier, created_at,
-                                    {", ".join(reactive_cols)})
-            SELECT smiles, cas, product_no, supplier, created_at,
-                   {", ".join(reactive_cols)}
-            FROM   {alias}.precursors
-        """)
-        conn.commit()
-        cur.execute(f"DETACH DATABASE {alias}")
-        logger.info("Appended %r", path)
-
-    cur.execute("SELECT COUNT(*) FROM precursors")
-    logger.info("Merged %d rows into %s", cur.fetchone()[0], output_path)
-    conn.close()
 
 
 # ── Product database ──────────────────────────────────────────────────────────

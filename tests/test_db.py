@@ -1,8 +1,6 @@
-import csv
 import sqlite3
 
 from baymol.db import (
-    db_to_csv,
     deduplicate_precursors,
     init_precursors_database,
     init_products_database,
@@ -133,26 +131,6 @@ class TestMergePrecursors:
         conn.close()
         assert rows["shared"] == "S1,S2"
         assert set(rows) == {"shared", "only_S1", "only_S2"}
-
-
-# ── db_to_csv ─────────────────────────────────────────────────────────────────
-
-class TestDbToCsv:
-    def test_export_precursors(self, tmp_path):
-        db, out = tmp_path / "pre.db", tmp_path / "pre.csv"
-        init_precursors_database(str(db))
-        save_precursors([{"smiles": "A", "supplier": "S1"}], str(db))
-        db_to_csv(str(db), str(out))
-        with open(out, newline="", encoding="utf-8") as f:
-            reader = list(csv.reader(f))
-        assert "smiles" in reader[0]
-        assert len(reader) == 2  # header + 1 row
-
-    def test_missing_table_does_not_write(self, tmp_path):
-        db, out = tmp_path / "pre.db", tmp_path / "pre.csv"
-        init_precursors_database(str(db))
-        db_to_csv(str(db), str(out), table_name="nonexistent")
-        assert not out.exists()
 
 
 # ── products tables ───────────────────────────────────────────────────────────
