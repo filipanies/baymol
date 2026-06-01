@@ -191,6 +191,7 @@ def init_products_database(db_path: str) -> None:
             product_smiles     TEXT NOT NULL,
             precursor_a_smiles TEXT NOT NULL,
             precursor_b_smiles TEXT NOT NULL,
+            reaction_name      TEXT NOT NULL,
             created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)

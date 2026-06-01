@@ -215,7 +215,8 @@ def process_row(row_a: dict, precursors_db: Optional[str] = None) -> list[dict]:
     opens and closes its own connection.
 
     Returns:
-        List of dicts with keys: product_smiles, precursor_a_smiles, precursor_b_smiles.
+        List of dicts with keys: product_smiles, precursor_a_smiles,
+        precursor_b_smiles, reaction_name.
     """
     a = row_a
     row_products = []
@@ -231,11 +232,12 @@ def process_row(row_a: dict, precursors_db: Optional[str] = None) -> list[dict]:
         raise ValueError("process_row needs a worker connection or a precursors_db path")
     cursor = conn.cursor()
 
-    def _add(product_smiles, partner):
+    def _add(product_smiles, partner, reaction_name):
         row_products.append({
             "product_smiles":     product_smiles,
             "precursor_a_smiles": a["smiles"],
             "precursor_b_smiles": partner["smiles"],
+            "reaction_name":      reaction_name,
         })
 
     try:
@@ -272,7 +274,7 @@ def process_row(row_a: dict, precursors_db: Optional[str] = None) -> list[dict]:
                         if out is None:
                             continue
 
-                _add(out, b)
+                _add(out, b, "Suzuki")
 
         elif n_bo2 > 1:
             # A has multiple bo2 → couple with every B that has exactly one halide
@@ -304,7 +306,7 @@ def process_row(row_a: dict, precursors_db: Optional[str] = None) -> list[dict]:
                         if out is None:
                             continue
 
-                _add(out, b)
+                _add(out, b, "Suzuki")
 
         # ── Stille coupling (organotin) ───────────────────────────────────────
         n_sn = a["aryl_snr3"] + a["alkene_snr3"]
@@ -338,7 +340,7 @@ def process_row(row_a: dict, precursors_db: Optional[str] = None) -> list[dict]:
                         if out is None:
                             continue
 
-                _add(out, b)
+                _add(out, b, "Stille")
 
         elif n_sn > 1:
             x, y = a["aryl_snr3"], a["alkene_snr3"]
@@ -369,7 +371,7 @@ def process_row(row_a: dict, precursors_db: Optional[str] = None) -> list[dict]:
                         if out is None:
                             continue
 
-                _add(out, b)
+                _add(out, b, "Stille")
 
         # ── Sonogashira coupling (terminal alkyne) ────────────────────────────
         n_alk = a["terminal_alkyne"]
@@ -394,7 +396,7 @@ def process_row(row_a: dict, precursors_db: Optional[str] = None) -> list[dict]:
                     if out is None:
                         continue
 
-                _add(out, b)
+                _add(out, b, "Sonogashira")
 
         elif n_alk > 1 and not a_has_hal:
             cursor.execute(
@@ -414,7 +416,7 @@ def process_row(row_a: dict, precursors_db: Optional[str] = None) -> list[dict]:
                     if out is None:
                         continue
 
-                _add(out, b)
+                _add(out, b, "Sonogashira")
 
         # ── Knoevenagel condensation (aryl aldehyde) ──────────────────────────
         n_ald = a["aryl_aldehyde"]
@@ -441,7 +443,7 @@ def process_row(row_a: dict, precursors_db: Optional[str] = None) -> list[dict]:
                     if out is None:
                         continue
 
-                _add(out, b)
+                _add(out, b, "Knoevenagel")
 
         elif n_ald > 1:
             # A has multiple aldehydes → couple with B that has exactly one methylene site
@@ -464,7 +466,7 @@ def process_row(row_a: dict, precursors_db: Optional[str] = None) -> list[dict]:
                     if out is None:
                         continue
 
-                _add(out, b)
+                _add(out, b, "Knoevenagel")
 
     finally:
         if owns_conn:
@@ -538,8 +540,8 @@ def generate_products(
                     if row_products:
                         cur_prod.executemany(
                             """INSERT INTO products
-                               (product_smiles, precursor_a_smiles, precursor_b_smiles)
-                               VALUES (:product_smiles, :precursor_a_smiles, :precursor_b_smiles)""",
+                               (product_smiles, precursor_a_smiles, precursor_b_smiles, reaction_name)
+                               VALUES (:product_smiles, :precursor_a_smiles, :precursor_b_smiles, :reaction_name)""",
                             row_products,
                         )
                         conn_prod.commit()
@@ -561,8 +563,9 @@ def generate_products(
 def deduplicate_products(db_path: str, output_path: str) -> None:
     """Deduplicate a products database by product_smiles.
 
-    For duplicate rows the precursor SMILES lists are merged into the surviving
-    (lowest-id) row. Done entirely in SQL to avoid loading data into RAM.
+    For duplicate rows the precursor SMILES and reaction-name lists are merged
+    into the surviving (lowest-id) row. Done entirely in SQL to avoid loading
+    data into RAM.
 
     Args:
         db_path:     Input products SQLite database.
@@ -618,6 +621,14 @@ def deduplicate_products(db_path: str, output_path: str) -> None:
             precursor_b_smiles = (
                 SELECT group_concat(val, ',') FROM (
                     SELECT DISTINCT g.precursor_b_smiles AS val
+                    FROM products g
+                    WHERE g.product_smiles = products.product_smiles
+                    ORDER BY g.id
+                )
+            ),
+            reaction_name = (
+                SELECT group_concat(val, ',') FROM (
+                    SELECT DISTINCT g.reaction_name AS val
                     FROM products g
                     WHERE g.product_smiles = products.product_smiles
                     ORDER BY g.id
