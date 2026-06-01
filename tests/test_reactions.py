@@ -9,6 +9,7 @@ from baymol.reactions import (
     SUZUKI,
     chemical_reaction,
     deduplicate_products,
+    generate_products,
     init_products_database,
     mol_from_smiles,
     process_row,
@@ -52,6 +53,15 @@ def make_precursors_db(path, rows):
     conn.commit()
     conn.close()
     return path
+
+
+def first_row(db):
+    """Read precursor id=1 from a precursors DB as a plain dict."""
+    conn = sqlite3.connect(db)
+    conn.row_factory = sqlite3.Row
+    row = dict(conn.execute("SELECT * FROM precursors WHERE id = 1").fetchone())
+    conn.close()
+    return row
 
 
 # ── mol_from_smiles ───────────────────────────────────────────────────────────
@@ -182,6 +192,57 @@ class TestProcessRow:
         assert len(results) == 1
         assert results[0]["reaction_name"] == "Knoevenagel"
 
+    # ── branch coverage: alkene variants, multi-site donor, multi-halide threading ──
+
+    def test_suzuki_alkene_halide_partner(self, tmp_path):  # SUZUKI_ALKENE_HAL
+        db = make_precursors_db(tmp_path / "pre.db", [
+            {"smiles": "OB(O)c1ccccc1", "aryl_bo2": 1},
+            {"smiles": "Br/C=C/c1ccccc1", "alkene_hal": 1},   # (E)-bromostyrene
+        ])
+        results = process_row(first_row(db), str(db))
+        assert len(results) == 1
+        assert results[0]["reaction_name"] == "Suzuki"
+        assert canon(results[0]["product_smiles"]) == canon("C(=Cc1ccccc1)c1ccccc1")  # stilbene
+
+    def test_suzuki_multi_site_donor(self, tmp_path):  # n_bo2 > 1 branch + threaded coupling
+        db = make_precursors_db(tmp_path / "pre.db", [
+            {"smiles": "OB(O)c1ccc(B(O)O)cc1", "aryl_bo2": 2},  # 1,4-benzenediboronic acid
+            {"smiles": "Brc1ccccc1", "aryl_hal": 1},
+        ])
+        results = process_row(first_row(db), str(db))
+        assert len(results) == 1
+        assert results[0]["reaction_name"] == "Suzuki"
+        assert canon(results[0]["product_smiles"]) == canon("c1ccc(-c2ccc(-c3ccccc3)cc2)cc1")  # p-terphenyl
+
+    def test_suzuki_multi_halide_partner(self, tmp_path):  # threading n>1 in the n==1 branch
+        db = make_precursors_db(tmp_path / "pre.db", [
+            {"smiles": "OB(O)c1ccccc1", "aryl_bo2": 1},
+            {"smiles": "Brc1ccc(Br)cc1", "aryl_hal": 2},        # 1,4-dibromobenzene
+        ])
+        results = process_row(first_row(db), str(db))
+        assert len(results) == 1
+        assert canon(results[0]["product_smiles"]) == canon("c1ccc(-c2ccc(-c3ccccc3)cc2)cc1")  # p-terphenyl
+
+    def test_stille_alkene_halide_partner(self, tmp_path):  # STILLE_ALKENE_HAL
+        db = make_precursors_db(tmp_path / "pre.db", [
+            {"smiles": "C[Sn](C)(C)c1ccccc1", "aryl_snr3": 1},
+            {"smiles": "Br/C=C/c1ccccc1", "alkene_hal": 1},
+        ])
+        results = process_row(first_row(db), str(db))
+        assert len(results) == 1
+        assert results[0]["reaction_name"] == "Stille"
+        assert canon(results[0]["product_smiles"]) == canon("C(=Cc1ccccc1)c1ccccc1")  # stilbene
+
+    def test_sonogashira_alkene_halide_partner(self, tmp_path):  # SONOGASHIRA_ALKENE_HAL
+        db = make_precursors_db(tmp_path / "pre.db", [
+            {"smiles": "C#Cc1ccccc1", "terminal_alkyne": 1},
+            {"smiles": "Br/C=C/c1ccccc1", "alkene_hal": 1},
+        ])
+        results = process_row(first_row(db), str(db))
+        assert len(results) == 1
+        assert results[0]["reaction_name"] == "Sonogashira"
+        assert canon(results[0]["product_smiles"]) == canon("C(#Cc1ccccc1)C=Cc1ccccc1")  # phenyl enyne
+
     def test_no_partner_no_products(self, tmp_path):
         db = make_precursors_db(tmp_path / "pre.db", [
             {"smiles": "OB(O)c1ccccc1", "aryl_bo2": 1},
@@ -260,3 +321,28 @@ class TestProductsDatabase:
         n = conn.execute("SELECT COUNT(*) FROM products").fetchone()[0]
         conn.close()
         assert n == 2
+
+
+# ── generate_products (end-to-end orchestration: pool + DB write) ─────────────
+
+class TestGenerateProducts:
+    def test_end_to_end_suzuki(self, tmp_path):
+        pre = make_precursors_db(tmp_path / "pre.db", [
+            {"smiles": "OB(O)c1ccccc1", "aryl_bo2": 1},   # boronic acid
+            {"smiles": "Brc1ccccc1", "aryl_hal": 1},       # aryl halide
+        ])
+        products_db = tmp_path / "prod.db"
+        generate_products(str(pre), str(products_db), max_workers=2)
+
+        conn = sqlite3.connect(products_db)
+        rows = conn.execute(
+            "SELECT product_smiles, precursor_a_smiles, precursor_b_smiles, reaction_name FROM products"
+        ).fetchall()
+        conn.close()
+
+        assert len(rows) == 1
+        smiles, prec_a, prec_b, reaction = rows[0]
+        assert canon(smiles) == canon("c1ccc(-c2ccccc2)cc1")   # biphenyl
+        assert prec_a == "OB(O)c1ccccc1"
+        assert prec_b == "Brc1ccccc1"
+        assert reaction == "Suzuki"

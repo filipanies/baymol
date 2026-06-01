@@ -1,3 +1,4 @@
+import json
 import sqlite3
 
 import numpy as np
@@ -11,7 +12,7 @@ from baymol.featurise import (
     pack_counts,
     populate,
 )
-from baymol.features import morgan_count_fingerprint, morgan_fingerprint
+from baymol.features import compute_features, morgan_count_fingerprint, morgan_fingerprint
 
 PRODUCTS = [
     ("c1ccccc1", "Suzuki"),
@@ -91,6 +92,19 @@ class TestPopulate:
         ).fetchone()[0]
         conn.close()
         assert hac == 6
+
+    def test_molecular_features_values_roundtrip(self, tmp_path):
+        db = make_products_db(tmp_path / "p.db", products=[("c1ccccc1C#N", "Suzuki")])
+        populate(str(db), max_workers=1, batch_size=1)
+        conn = sqlite3.connect(db)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT * FROM molecular_features").fetchone()
+        conn.close()
+
+        expected = compute_features("c1ccccc1C#N")
+        assert row["heavy_atom_count"] == expected["heavy_atom_count"]
+        assert json.loads(row["unique_elements"]) == expected["unique_elements"]
+        assert row["nitrile"] == 1   # benzonitrile → nitrile flag stored as int
 
     def test_resume_is_idempotent(self, tmp_path):
         db = make_products_db(tmp_path / "p.db")

@@ -122,6 +122,23 @@ class TestDeduplicatePrecursors:
         conn.close()
         assert n == 1
 
+    def test_survivor_keeps_lowest_id_fields(self, tmp_path):
+        db = tmp_path / "pre.db"
+        init_precursors_database(str(db))
+        save_precursors(
+            [
+                {"smiles": "A", "supplier": "S1", "cas": "111-11-1", "product_no": "P1"},
+                {"smiles": "A", "supplier": "S2", "cas": "222-22-2", "product_no": "P2"},
+            ],
+            str(db),
+        )
+        deduplicate_precursors(str(db))
+        conn = sqlite3.connect(db)
+        row = conn.execute("SELECT supplier, cas, product_no FROM precursors").fetchone()
+        conn.close()
+        # suppliers are merged; the lowest-id survivor's cas/product_no win
+        assert row == ("S1,S2", "111-11-1", "P1")
+
 
 # ── merge_precursors ──────────────────────────────────────────────────────────
 
