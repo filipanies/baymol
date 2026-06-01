@@ -2,7 +2,7 @@
 
 BayMol is a Python/RDKit toolkit for building synthesis-constrained molecular libraries for AI-guided molecular and materials discovery.
 
-The project grew out of a first use case: discovering candidate organic electron-transport materials for perovskite solar cells. Given a set of purchasable precursors, BayMol detects their reactive motifs, enumerates the products they can form under one-step cross-coupling reactions, and deduplicates the resulting library — producing synthesis-aware candidate molecules for downstream screening.
+The project grew out of a first use case: discovering candidate organic electron-transport materials for perovskite solar cells. Given a set of purchasable precursors, BayMol detects their reactive motifs, enumerates the products they can form under one-step coupling and condensation reactions, and deduplicates the resulting library — producing synthesis-aware candidate molecules for downstream screening.
 
 The design is reaction- and objective-agnostic: different precursor sets and reaction SMARTS can target other one-step molecular discovery problems.
 
@@ -10,9 +10,9 @@ The design is reaction- and objective-agnostic: different precursor sets and rea
 
 ## What BayMol does (this release)
 
-- Detects reactive precursor motifs — aryl/alkene halides, boronic acids/esters, stannanes, terminal alkynes, aryl aldehydes, and diketones — using SMARTS patterns
+- Detects reactive precursor motifs — aryl/alkene halides, boronic acids/esters, stannanes, terminal alkynes, aryl aldehydes, and activated methylene motifs — using SMARTS patterns
 - Flags self-polymerisable precursors (those carrying both a halide and a coupling nucleophile) so they can be excluded from the library
-- Enumerates candidate products via one-step RDKit reaction SMARTS for Suzuki, Stille, Sonogashira, and Knoevenagel couplings
+- Enumerates candidate products via one-step RDKit reaction SMARTS for the Suzuki, Stille, and Sonogashira couplings and the Knoevenagel condensation
 - Deduplicates products by canonical SMILES, merging the precursors and reactions that lead to each product
 - Computes molecular features for each product — RDKit scalar descriptors, element composition, boolean substructure flags, and Morgan fingerprints
 - Stores features and fingerprints in SQLite tables alongside the products, computed in parallel and resumably
@@ -20,7 +20,8 @@ The design is reaction- and objective-agnostic: different precursor sets and rea
 ## Roadmap
 
 - Surrogate property prediction (e.g. HOMO/LUMO frontier orbital energies) and active learning
-- Ask–tell Bayesian optimisation over the generated library
+- Property-based filtering to down-select a promising candidate subset
+- Ask–tell Bayesian optimisation over the down-selected subset
 
 ## Installation
 
