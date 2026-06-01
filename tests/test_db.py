@@ -157,4 +157,4 @@ class TestProductsTables:
     def test_init_products(self, tmp_path):
         db = tmp_path / "prod.db"
         init_products_database(str(db))
-        assert {"product_smiles", "precursor_a_smiles", "precursor_b_smiles"} <= table_columns(db, "products")
+        assert {"product_smiles", "precursor_a_smiles", "precursor_b_smiles", "reaction_name"} <= table_columns(db, "products")
