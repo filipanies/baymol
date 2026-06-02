@@ -1,5 +1,7 @@
 # BayMol
 
+[![CI](https://github.com/filipanies/baymol/actions/workflows/ci.yml/badge.svg)](https://github.com/filipanies/baymol/actions/workflows/ci.yml)
+
 BayMol is a Python/RDKit toolkit for building synthesis-constrained molecular libraries for AI-guided molecular and materials discovery.
 
 The project grew out of a first use case: discovering candidate organic electron-transport materials for perovskite solar cells. Given a set of purchasable precursors, BayMol detects their reactive motifs, enumerates the products they can form under one-step coupling and condensation reactions, and deduplicates the resulting library — producing synthesis-aware candidate molecules for downstream screening.
