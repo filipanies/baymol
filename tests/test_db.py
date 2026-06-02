@@ -7,6 +7,7 @@ from baymol.db import (
     init_fingerprints_table,
     init_molecular_features_table,
     init_precursors_database,
+    init_predictions_table,
     init_products_database,
     merge_precursors,
     save_precursors,
@@ -196,3 +197,26 @@ class TestFeatureTables:
         init_products_database(str(db))
         init_fingerprints_table(str(db))
         assert {"product_id", "morgan_fp", "morgan_count_fp"} <= table_columns(db, "fingerprints")
+
+
+class TestPredictionsTable:
+    def test_columns(self, tmp_path):
+        db = tmp_path / "prod.db"
+        init_products_database(str(db))
+        init_predictions_table(str(db))
+        assert {"product_id", "model", "homo_ev", "lumo_ev", "gap_ev"} <= table_columns(db, "predictions")
+
+    def test_same_product_two_models_allowed(self, tmp_path):
+        # (product_id, model) is the PK — one product may have a row per model
+        db = tmp_path / "prod.db"
+        init_products_database(str(db))
+        init_predictions_table(str(db))
+        conn = sqlite3.connect(db)
+        conn.executemany(
+            "INSERT INTO predictions (product_id, model, homo_ev, lumo_ev, gap_ev) VALUES (?,?,?,?,?)",
+            [(1, "m1", -5.0, -1.0, 4.0), (1, "m2", -5.1, -1.2, 3.9)],
+        )
+        conn.commit()
+        n = conn.execute("SELECT COUNT(*) FROM predictions WHERE product_id = 1").fetchone()[0]
+        conn.close()
+        assert n == 2
