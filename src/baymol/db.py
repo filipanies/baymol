@@ -272,3 +272,30 @@ def init_fingerprints_table(db_path: str) -> None:
     conn.commit()
     conn.close()
     logger.info("fingerprints table ready: %s", db_path)
+
+
+# ── Prediction table ──────────────────────────────────────────────────────────
+
+def init_predictions_table(db_path: str) -> None:
+    """Create the predictions table on an existing products database.
+
+    Holds model-predicted orbital energies. Unlike the feature tables this is
+    NOT 1:1 with products: a product may be predicted by several models, so the
+    primary key is (product_id, model) — one prediction per product per model.
+    The model column records provenance (which trained model produced the row).
+    """
+    conn = sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS predictions (
+            product_id INTEGER NOT NULL REFERENCES products(id),
+            model      TEXT NOT NULL,
+            homo_ev    REAL NOT NULL,
+            lumo_ev    REAL NOT NULL,
+            gap_ev     REAL NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (product_id, model)
+        )
+    """)
+    conn.commit()
+    conn.close()
+    logger.info("predictions table ready: %s", db_path)
