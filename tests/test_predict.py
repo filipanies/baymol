@@ -1,7 +1,9 @@
 import sqlite3
+import sys
 
 import pytest
 
+from baymol import predict
 from baymol.db import init_products_database
 from baymol.predict import predict_properties
 
@@ -93,3 +95,24 @@ class TestPredictProperties:
         db = make_products_db(tmp_path / "p.db")
         with pytest.raises(ValueError):
             predict_properties(str(db), _short_predictor, model_name="m1", batch_size=10)
+
+
+# ── Chemprop adapter + CLI (wiring only — the inference core needs a real model) ──
+
+class TestChempropAdapterAndCLI:
+    def test_missing_model_raises_before_importing_chemprop(self, tmp_path):
+        # the model glob is checked before any chemprop import, so this works
+        # even without the [ml] extra installed
+        with pytest.raises(FileNotFoundError):
+            predict.load_chemprop_predictor(str(tmp_path))  # empty dir, no model_*/best.pt
+
+    def test_cli_wires_predictor_and_defaults_model_name(self, tmp_path, monkeypatch):
+        db = make_products_db(tmp_path / "p.db")
+        # swap the real (torch-backed) adapter for the fake predictor
+        monkeypatch.setattr(predict, "load_chemprop_predictor", lambda model_dir: fake_predictor)
+        monkeypatch.setattr(sys, "argv", ["baymol.predict", str(db), "--model", str(tmp_path / "my_model")])
+
+        predict.main()
+
+        # model_name defaults to the model directory's name
+        assert len(rows(db, "my_model")) == len(PRODUCTS)

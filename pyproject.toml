@@ -18,6 +18,9 @@ dev = [
     "pytest",
     "ruff",
 ]
+ml = [
+    "chemprop",
+]
 
 [project.urls]
 Homepage = "https://github.com/filipanies/baymol"
