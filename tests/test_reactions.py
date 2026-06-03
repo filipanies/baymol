@@ -4,6 +4,8 @@ import pytest
 from rdkit import Chem
 
 from baymol.reactions import (
+    KNOEVENAGEL_KETONE,
+    KNOEVENAGEL_MALONONITRILE,
     SONOGASHIRA,
     STILLE,
     SUZUKI,
@@ -89,6 +91,22 @@ class TestChemicalReaction:
     def test_sonogashira_makes_alkyne(self):
         products = chemical_reaction(SONOGASHIRA, "Brc1ccccc1", "C#Cc1ccccc1")
         assert canon("C(#Cc1ccccc1)c1ccccc1") in {canon(p) for p in products}
+
+    def test_knoevenagel_makes_condensation_product(self):
+        products = chemical_reaction(
+            KNOEVENAGEL_KETONE, "O=Cc1ccccc1", "O=C1CC(=O)c2ccccc21"
+        )
+        assert canon("O=C1C(=Cc2ccccc2)C(=O)c2ccccc21") in {canon(p) for p in products}
+
+    def test_knoevenagel_deuterated_aldehyde_stays_valid(self):
+        # Regression: [C:2] (not [CH:2]) keeps deuterated aldehydes from going pentavalent.
+        for reaction, partner in (
+            (KNOEVENAGEL_KETONE, "O=C1CC(=O)c2ccccc21"),
+            (KNOEVENAGEL_MALONONITRILE, "CC(=O)CC=C(C#N)C#N"),
+        ):
+            products = chemical_reaction(reaction, "[2H]C(=O)c1ccccc1", partner)
+            assert products, f"{reaction!r} dropped all deuterated products"
+            assert any("2H" in p for p in products), "deuterium label lost"
 
     def test_bad_precursor_returns_empty(self):
         assert chemical_reaction(SUZUKI, "garbage((", "OB(O)c1ccccc1") == []
