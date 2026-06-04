@@ -38,6 +38,22 @@ Requires Python ≥ 3.10. Core dependencies: RDKit and NumPy.
 
 ## Usage
 
+The quickest way to see the whole toolkit in action is the runnable demo. From
+100 real precursors (frozen in `examples/example_precursors.csv`) it detects
+reactive sites and drops self-polymerisable compounds, enumerates products
+across all four reactions, deduplicates them (merging products reachable by more
+than one route — e.g. the same molecule via a Suzuki *and* a Stille coupling),
+computes molecular features (descriptors + Morgan fingerprints), and reports
+HOMO/LUMO/gap from an OE62+CEPDB10k-trained Chemprop model (real values, frozen
+in `examples/example_predictions.csv` so the demo needs no external data, no
+PyTorch — core install only):
+
+```bash
+python examples/quickstart.py
+```
+
+The sections below cover each stage on its own.
+
 ### Detect reactive sites
 
 ```python

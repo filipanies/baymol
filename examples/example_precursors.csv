@@ -1,0 +1,101 @@
+smiles,cas,product_no,supplier,note
+Brc1ccc2cc3c[nH]cc3cc2c1,1656292-40-8,V10965,Supplier3,coverage: aryl halide (electrophile)
+CC(C)(C)OB(OC(C)(C)C)c1c2c(c(B(OC(C)(C)C)OC(C)(C)C)c3nsnc13)N=S=N2,,U81930,Supplier3,coverage: Suzuki (boronic acid)
+[CH3][Sn]([CH3])([CH3])[c]1c2c([c]([Sn]([CH3])([CH3])[CH3])c3nsnc13)N=S=N2,2136294-47-6,Z55945,Supplier3,coverage: Stille (organotin)
+C#Cc1ccc(C2=C3C(C)=CC(C)=[N+]3[B-](F)(F)n3c(C)cc(C)c32)cc1,628729-80-6,I90321,Supplier3,coverage: Sonogashira (terminal alkyne)
+O=Cc1ccc2c(c1)C(=O)c1ccc(C=O)cc1C2=O,102041-91-8,N22603,Supplier3,coverage: Knoevenagel (aryl aldehyde)
+O=C1CC(=O)c2cscc21,246232-39-3,T92806,Supplier3,coverage: Knoevenagel (active methylene)
+COc1c(Br)cc(C=O)cc1B1OC(=O)CN(C)CC(=O)O1,,M06596,Supplier2,self-polymerisable (dropped by filter)
+[CH3][Sn]([CH3])([CH3])[c]1cc2s[c]([Sn]([CH3])([CH3])[CH3])cc2s1,469912-82-1,L32127,"Supplier1,Supplier2,Supplier3,Supplier4,Supplier5,Supplier6",collision route (BrC#Cc1ccc(-c2cc3sc(-c4c...)
+BrC#Cc1ccc(Br)cc1,,U19732,Supplier2,collision route (BrC#Cc1ccc(-c2cc3sc(-c4c...)
+OB(O)c1cc2sc(B(O)O)cc2s1,1281324-46-6,W88323,Supplier3,collision route (BrC#Cc1ccc(-c2cc3sc(-c4c...)
+CC1(C)OB(c2cc3sc(B4OC(C)(C)C(C)(C)O4)cc3s2)OC1(C)C,924894-85-9,E34422,Supplier1,collision route (BrC#Cc1ccc(-c2cc3sc(-c4c...)
+OB(O)c1cc2sc3ccsc3c2s1,183960-95-4,X88540,Supplier3,collision route (BrC#Cc1ccc(-c2cc3sc4ccsc...)
+[CH3][Sn]([CH3])([CH3])[c]1cc2sc3ccsc3c2s1,1067169-84-9,G12377,Supplier3,collision route (BrC#Cc1ccc(-c2cc3sc4ccsc...)
+CCC[CH2][Sn]([CH2]CCC)([CH2]CCC)[c]1cc2sc3ccsc3c2s1,648430-74-4,H89832,Supplier3,collision route (BrC#Cc1ccc(-c2cc3sc4ccsc...)
+Cc1sc(B(O)O)cc1Br,154566-69-5,V86610,"Supplier1,Supplier2",random
+O=[N+]([O-])c1cc(Br)cc(Br)c1O,15969-09-2,R84289,Supplier6,random
+C#Cc1cccc2cnccc12,,K09776,Supplier2,random
+[2H]C(=O)c1ccc(-c2ccc(-c3cc(-c4ccc(-c5ccc(C([2H])=O)cc5)cc4)c(-c4ccc(-c5ccc(C(C)=O)cc5)cc4)cc3-c3ccc(-c4ccc(C([2H])=O)cc4)cc3)cc2)cc1,2376339-70-5,O84702,Supplier1,random
+COC(=O)c1ccc(Br)c(=O)[nH]1,178876-86-3,A41833,"Supplier1,Supplier2",random
+Cc1c(F)ccc2c(C=O)c[nH]c12,,U94951,Supplier5,random
+Brc1cnc2c(ccc3cc(Br)cnc32)c1,100125-12-0,N63085,Supplier6,random
+O=Cc1cncc2c1NCCO2,,E41214,Supplier5,random
+Brc1cccc(C#Cc2cccc(Br)c2)c1,153404-60-5,G25060,Supplier6,random
+Cc1cc(F)c(C=O)cc1B(O)O,2377606-69-2,F54078,Supplier2,random
+Clc1ccn2c(Br)cnc2c1,342613-67-6,X97687,Supplier2,random
+[2H]N1Cc2ccc(Br)cc2C1=O,675109-26-9,A08018,Supplier1,random
+Clc1ncc2scc(Br)c2n1,1152475-42-7,O82666,Supplier1,random
+Fc1cccc(-c2ccc(Br)cc2)c1,40641-65-4,W85183,Supplier2,random
+COC(=O)c1csc(C=O)c1,67808-66-6,B99921,"Supplier2,Supplier7",random
+O=[N+]([O-])c1c(Cl)ccnc1Br,1261732-45-9,B86369,"Supplier1,Supplier2",random
+O=Cc1ccc(F)cc1C=O,89226-83-5,G90599,Supplier2,random
+O=C(N[C@@H](CCc1ccc(I)cc1)C(=O)O)OCC1c2ccccc2-c2ccccc21,2349795-42-0,C30560,Supplier2,random
+O=C(O)Cc1ccc(O)c(I)c1,19039-15-7,W96607,Supplier2,random
+CCCCCCCCCOc1ccc(C=O)cc1,50262-46-9,H79345,Supplier2,random
+BrCc1cccc(I)c1Br,1261649-03-9,F49433,Supplier2,random
+CCOC(=O)CCc1ccc(C=O)cc1,445483-72-7,F74294,Supplier2,random
+Nc1cc(F)c(F)cc1Br,64695-79-0,Z52222,Supplier2,random
+O=Cc1ccnc(Cl)c1,,O71582,"Supplier2,Supplier5,Supplier6,Supplier7",random
+Fc1cccnc1I,146141-04-0,I64276,"Supplier1,Supplier2,Supplier5",random
+O=Cc1ccc(Br)cc1F,57848-46-1,K03739,"Supplier2,Supplier6,Supplier7",random
+O=Cc1cccc([N+](=O)[O-])n1,131747-64-3,X59875,Supplier2,random
+CCC[C@H]1CC[C@H](c2ccc(I)cc2)CC1,111158-11-3,G32133,Supplier2,random
+Brc1cc2ccccc2cc1Br,13214-70-5,M94092,"Supplier1,Supplier2,Supplier4,Supplier6",random
+COc1ncc(Br)c2[nH]ccc12,446284-60-2,B13727,Supplier2,random
+O=C(O)c1ccc(Br)nc1Cl,,Q19750,"Supplier2,Supplier5",random
+O=Cc1cc2ccc1CCc1ccc(cc1)CC2,147127-97-7,F98310,Supplier2,random
+Cl.Ic1ccc2nccn2c1,1205744-55-3,D00571,"Supplier1,Supplier2",random
+COC(=O)c1ccc(I)c([N+](=O)[O-])c1,89976-27-2,H69785,"Supplier2,Supplier7",random
+CN(C)c1ccc(C=O)cc1[N+](=O)[O-],59935-39-6,G56720,Supplier2,random
+COB(OC)c1c(OC)ccc2ccccc12,104116-17-8,T26659,Supplier1,random
+Cc1nc(C#CCO)ccc1Br,2227448-95-3,R44589,Supplier2,random
+O=Cc1ccc2ccc3cccc4ccc1c2c34,3029-19-4,I55391,"Supplier2,Supplier3,Supplier5,Supplier6",random
+COc1c(I)ccnc1Cl,1227592-88-2,V63004,Supplier2,random
+Nc1ncnc(Cl)c1C=O,14160-93-1,W09531,Supplier2,random
+Fc1cc(OCc2ccccc2)ccc1Br,185346-79-6,U81120,Supplier7,random
+Brc1ccc2c(c1)C(c1ccccc1)(c1ccccc1)c1cc(Br)ccc1-2,186259-63-2,Q84250,"Supplier1,Supplier2,Supplier6",random
+N#Cc1cc(Br)cc([N+](=O)[O-])c1,49674-15-9,O36574,Supplier2,random
+Brc1ccc(SSc2ccc(Br)cc2)cc1,5335-84-2,E13711,Supplier6,random
+COc1ccc(Br)cc1C(C)(C)C,14804-34-3,R45126,Supplier2,random
+CC1(C)c2cc(Br)ccc2-c2c1cc(Br)c1ccccc21,1056884-35-5,G75328,"Supplier2,Supplier3,Supplier6",random
+COc1nccc(C)c1Br,717843-51-1,S89246,Supplier1,random
+Brc1ccc(-c2ccc(Br)cc2)cc1,,V91117,"Supplier5,Supplier7",random
+CCCCCOc1ccc(C=O)cc1OCC,,N97906,Supplier5,random
+COC(=O)c1cc(Br)c(O)cc1O,98437-43-5,S59261,Supplier2,random
+Brc1cccc2ccoc12,133720-60-2,V80096,Supplier2,random
+COC(=O)c1ccc(-c2ccc(Br)c3nsnc23)cc1,1132711-33-1,G88674,Supplier3,random
+COC(=O)c1ccc(C=O)s1,67808-64-4,F27557,"Supplier1,Supplier2",random
+COc1cc(N2CCC(=O)NC2=O)ccc1Br,1557727-96-4,K56417,Supplier2,random
+Cc1cc(C=O)cs1,29421-72-5,B92542,Supplier2,random
+O=C(O)c1ccc(F)cc1I,56096-89-0,I54265,"Supplier2,Supplier4,Supplier5,Supplier7",random
+O=Cc1ccn(C2CC2)n1,1823349-88-7,T05356,Supplier2,random
+N#Cc1ccc(Br)c(=O)[nH]1,1780045-62-6,Z68932,Supplier2,random
+CCOC(=O)c1cc(Br)ccn1,62150-47-4,Y08937,"Supplier1,Supplier2",random
+O=Cc1cc(Cl)c(O)cc1O,131088-02-3,N36649,Supplier2,random
+Fc1cccc(Br)c1,,J19729,"Supplier5,Supplier6,Supplier7",random
+CCCCC(CC)Cn1nc2c(Br)c([N+](=O)[O-])c([N+](=O)[O-])c(Br)c2n1,1613460-25-5,L19236,Supplier3,random
+CCCCCCCCCCCCOc1cc(-n2c3c[c]([Sn]([CH3])([CH3])[CH3])sc3c3s[c]([Sn]([CH3])([CH3])[CH3])cc32)cc(OCCCCCCCCCCCC)c1OCCCCCCCCCCCC,1334032-09-5,U13216,Supplier3,random
+CCC[CH2][Sn]([CH2]CCC)([CH2]CCC)[c]1cc2[se]ccc2s1,2453212-69-4,B97723,Supplier3,random
+O=C1Cc2ncc(Br)cc2N1,1190319-62-0,H28964,"Supplier1,Supplier2",random
+N#Cc1ccc(C(=O)O)cc1Br,58123-69-6,M92211,Supplier2,random
+CCCCCCCCCCC(CCCCCCCC)Cc1cc(-c2cc3c4nsnc4c4cc(-c5cc(CC(CCCCCCCC)CCCCCCCCCC)c(Br)s5)sc4c3s2)sc1Br,1639449-99-2,I40599,Supplier3,random
+CCc1cccc(C)c1I,175277-95-9,W77679,Supplier7,random
+O=[N+]([O-])c1cncc(Cl)c1Br,1072141-30-0,F84055,Supplier2,random
+COc1cc(OC)c([I+]c2ccccc2)c(OC)c1.Cc1ccc(S(=O)(=O)[O-])cc1,936326-60-2,S25453,Supplier6,random
+Ic1ccc2cc[nH]c2c1,115666-47-2,B10078,"Supplier1,Supplier2",random
+O=Cc1cc2c(F)cc(F)cc2nc1Cl,956631-90-6,J44955,Supplier2,random
+Brc1cc2ccsc2s1,25121-81-7,D24732,Supplier6,random
+COC(=O)c1cc(F)c(C)cc1Br,1204304-98-2,S64124,Supplier2,random
+CC1(C)OB(c2ccc3ccc4cccc5ccc2c3c45)OC1(C)C,349666-24-6,M74783,Supplier3,random
+C#CCCCCCCCCCCCCCCCCCC(=O)O,,G09684,Supplier5,random
+CC(C)(C)OC(=O)Nc1cccc(I)c1,143390-49-2,D34164,Supplier2,random
+COc1cc(Br)ccc1[N+](=O)[O-],,Q81287,Supplier5,random
+Ic1cc(C2CCCCC2)c(I)cc1C1CCCCC1,,L62545,Supplier5,random
+O=Cc1cc(F)cs1,32431-71-3,A90722,Supplier3,random
+NC(CC(=O)O)c1cccc(Br)c1,117391-50-1,K41594,Supplier6,random
+Brc1ccc2ncnn2c1,356560-80-0,G48810,Supplier1,random
+[CH3][Sn]([CH3])([CH3])[c]1ccc(-c2ccc(-c3cc[c]([Sn]([CH3])([CH3])[CH3])s3)s2)s1,178931-63-0,Y90133,"Supplier1,Supplier2,Supplier3,Supplier6",random
+N#Cc1cnn2cccc(Br)c12,2092153-80-3,G15766,Supplier2,random
+Cc1c(Br)ccnc1Cl,128071-86-3,Z82598,Supplier1,random
+Nc1ccc(C(F)(F)F)cc1C=O,1288999-05-2,T41297,Supplier2,random
