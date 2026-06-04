@@ -4,25 +4,24 @@
 
 BayMol is a Python/RDKit toolkit for building synthesis-constrained molecular libraries for AI-guided molecular and materials discovery.
 
-The project grew out of a first use case: discovering candidate organic electron-transport materials for perovskite solar cells. Given a set of purchasable precursors, BayMol detects their reactive motifs, enumerates the products they can form under one-step coupling and condensation reactions, and deduplicates the resulting library — producing synthesis-aware candidate molecules for downstream screening.
+The project grew out of a first use case: discovering candidate organic electron-transport materials for perovskite solar cells. Given a set of purchasable precursors, BayMol detects their reactive motifs, enumerates the products they can form under one-step coupling and condensation reactions, and deduplicates the resulting library, producing synthesis-aware candidate molecules for downstream screening.
 
 The design is reaction- and objective-agnostic: different precursor sets and reaction SMARTS can target other one-step molecular discovery problems.
 
-> **Status — early release.** Ships **candidate generation** (reactive-site detection, reaction enumeration, deduplication), **molecular featurisation** (RDKit descriptors, substructure flags, and Morgan fingerprints, stored in SQLite feature tables), and **property prediction** (HOMO/LUMO/gap via an injectable predictor, with an optional Chemprop adapter behind the `[ml]` extra — baymol consumes trained models rather than training them). Active-learning and Bayesian-optimisation stages are planned (see [Roadmap](#roadmap)).
+> **Status — early release.** Ships **candidate generation** (reactive-site detection, reaction enumeration, deduplication), **molecular featurisation** (RDKit descriptors, substructure flags, and Morgan fingerprints, stored in SQLite feature tables), and **property prediction** (HOMO/LUMO/gap via an injectable predictor, with an optional Chemprop adapter behind the `[ml]` extra, as baymol consumes trained models rather than training them). Active-learning and Bayesian optimisation stages are planned (see [Roadmap](#roadmap)).
 
 ## What BayMol does (this release)
 
-- Detects reactive precursor motifs — aryl/alkene halides, boronic acids/esters, stannanes, terminal alkynes, aryl aldehydes, and activated methylene motifs — using SMARTS patterns
+- Detects reactive precursor motifs using SMARTS patterns; aryl/alkene halides, boronic acids/esters, stannanes, terminal alkynes, aryl aldehydes, and activated methylene motifs 
 - Flags self-polymerisable precursors (those carrying both a halide and a coupling nucleophile) so they can be excluded from the library
 - Enumerates candidate products via one-step RDKit reaction SMARTS for the Suzuki, Stille, and Sonogashira couplings and the Knoevenagel condensation
 - Deduplicates products by canonical SMILES, merging the precursors and reactions that lead to each product
-- Computes molecular features for each product — RDKit scalar descriptors, element composition, boolean substructure flags, and Morgan fingerprints
+- Computes molecular features for each product: RDKit scalar descriptors, element composition, boolean substructure flags, and Morgan fingerprints
 - Stores features and fingerprints in SQLite tables alongside the products, computed in parallel and resumably
-- Predicts frontier-orbital properties (HOMO/LUMO/gap) for each product by handing SMILES to an injectable predictor — torch-free by default, with an optional Chemprop adapter (`[ml]` extra) for trained models — storing results per model in a `predictions` table
+- Predicts frontier-orbital properties (HOMO/LUMO/gap) for each product by handing SMILES to an injectable predictor, storing results per model in a `predictions` table (torch-free by default, with an optional Chemprop adapter (`[ml]` extra) for trained models)
 
 ## Roadmap
 
-- Active learning — iteratively choosing which products to label
 - Property-based filtering to down-select a promising candidate subset
 - Ask–tell Bayesian optimisation over the down-selected subset
 
@@ -45,11 +44,11 @@ The quickest way to see the whole toolkit in action is the runnable demo. From
 100 real precursors (frozen in `examples/example_precursors.csv`) it detects
 reactive sites and drops self-polymerisable compounds, enumerates products
 across all four reactions, deduplicates them (merging products reachable by more
-than one route — e.g. the same molecule via a Suzuki *and* a Stille coupling),
+than one route, e.g. the same molecule via Suzuki *and* Stille coupling),
 computes molecular features (descriptors + Morgan fingerprints), and reports
 HOMO/LUMO/gap from an OE62+CEPDB10k-trained Chemprop model (real values, frozen
 in `examples/example_predictions.csv` so the demo needs no external data, no
-PyTorch — core install only):
+PyTorch, core install only):
 
 ```bash
 python examples/quickstart.py
@@ -113,7 +112,7 @@ A single molecule can also be featurised from the command line:
 python -m baymol.features "c1ccncc1C#N" --pretty
 ```
 
-Or featurise a whole product database — `molecular_features` (scalar descriptors,
+Featurisation also works for a large product database, `molecular_features` (scalar descriptors,
 element composition, substructure flags) is always populated, Morgan fingerprints
 are opt-in, and the run is resumable:
 
@@ -125,7 +124,7 @@ python -m baymol.featurise products.db --fingerprints  # also Morgan fingerprint
 #### Predict properties
 
 `predict_properties` hands product SMILES to any predictor (`list[str] -> (homo,
-lumo, gap)` triples) and stores the results per model — staying torch-free unless
+lumo, gap)` triples) and stores the results per model, staying torch-free unless
 you opt into the Chemprop adapter:
 
 ```python
@@ -150,4 +149,4 @@ ruff check .  # lint
 
 ## License
 
-Released under the MIT License — see [LICENSE](LICENSE).
+Released under the MIT License; see [LICENSE](LICENSE).
