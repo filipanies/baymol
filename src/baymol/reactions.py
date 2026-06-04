@@ -60,16 +60,18 @@ STILLE_ALKENE_HAL = r"[c,C;^2:1]=[C:2][Br,I] . [c:3][Sn](C)(C)C >> [c,C;^2:1]=[C
 STILLE_ALKENE_SNR3 = r"[c:1][Br,I] . [c,C;^2:2]=[C:3][Sn](C)(C)C >> [c:1][C:3]=[c,C;^2:2]"
 STILLE_ALKENES    = r"[c,C;^2:1]=[C:2][Br,I] . [c,C;^2:3]=[C:4][Sn](C)(C)C >> [c,C;^2:1]=[C:2][C:4]=[c,C;^2:3]"
 
+# A deuterated terminal alkyne (D-C#C-) is left for the sanitiser to drop: the
+# label is carried onto the now-internal carbon, over-filling its valence (rare).
 SONOGASHIRA       = r"[c:1][Br,I] . [C;H1:2]#[C:3] >> [c,C:1][C:2]#[C:3]"
 SONOGASHIRA_ALKENE_HAL = r"[c,C;^2:1]=[C:2][Br,I] . [C;H1:3]#[C:4] >> [c,C;^2:1]=[C:2][C:3]#[C:4]"
 
 KNOEVENAGEL_MALONONITRILE = r"""
 [c:1][CH:2](=[O]) . [C:3](=[O:4])[CH2:5][C:6]=[C:7]([C]#[N])[C]#[N]
->> [c:1][CH:2]=[C:5]([C:3](=[O:4]))[C:6]=[C:7]([C]#[N])[C]#[N]
+>> [c:1][C:2]=[C:5]([C:3](=[O:4]))[C:6]=[C:7]([C]#[N])[C]#[N]
 """
 KNOEVENAGEL_KETONE = r"""
 [c:1][CH:2](=[O]) . [c:3][C:4](=[O:5])[CH2:6][C:7](=[O:8])[c:9]
->> [c:1][CH:2]=[C:6]([C:4](=[O:5])[c:3])[C:7](=[O:8])[c:9]
+>> [c:1][C:2]=[C:6]([C:4](=[O:5])[c:3])[C:7](=[O:8])[c:9]
 """
 
 
