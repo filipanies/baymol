@@ -65,8 +65,6 @@ STILLE_ALKENES    = r"[c,C;^2:1]=[C:2][Br,I] . [c,C;^2:3]=[C:4][Sn](C)(C)C >> [c
 SONOGASHIRA       = r"[c:1][Br,I] . [C;H1:2]#[C:3] >> [c,C:1][C:2]#[C:3]"
 SONOGASHIRA_ALKENE_HAL = r"[c,C;^2:1]=[C:2][Br,I] . [C;H1:3]#[C:4] >> [c,C;^2:1]=[C:2][C:3]#[C:4]"
 
-# Product vinyl carbon is [C:2], not [CH:2]: forcing an H over-fills the valence
-# of deuterated aldehydes ([c]C([2H])=O), whose label is carried over as a real atom.
 KNOEVENAGEL_MALONONITRILE = r"""
 [c:1][CH:2](=[O]) . [C:3](=[O:4])[CH2:5][C:6]=[C:7]([C]#[N])[C]#[N]
 >> [c:1][C:2]=[C:5]([C:3](=[O:4]))[C:6]=[C:7]([C]#[N])[C]#[N]
