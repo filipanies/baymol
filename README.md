@@ -80,8 +80,8 @@ from baymol.reactions import chemical_reaction, SUZUKI
 
 # Suzuki coupling: aryl halide + boronic acid -> biaryl
 chemical_reaction(SUZUKI, "Brc1ccccc1", "OB(O)c1ccccc1")
-# ['c1ccc(-c2ccccc2)cc1', ...]   biphenyl; symmetry-equivalent
-#                                duplicates are collapsed by the dedup step
+# ['c1ccc(-c2ccccc2)cc1', ...]
+# biphenyl; symmetry-equivalent duplicates are collapsed by the dedup step
 ```
 
 #### Generate and deduplicate a library (CLI)
